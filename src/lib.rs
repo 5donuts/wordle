@@ -97,7 +97,7 @@ impl<'a> Wordle<'a> {
 /// `letter` - The letter to check against `word`
 /// `idx` - The position of `letter` in the guess
 fn check_letter(word: &str, letter: char, idx: usize) -> LetterStatus {
-    assert!(idx >= 0 && idx < 5, "idx must be in [0..5)");
+    assert!(idx < 5, "idx must be in [0..5)");
     // letter is in word, need to check the position
     if word.contains(letter) {
         let word_letter_at_idx = word.chars().nth(idx).unwrap();
