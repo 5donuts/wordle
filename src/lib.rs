@@ -15,6 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#![warn(
+    missing_docs,
+    rust_2018_idioms,
+    missing_debug_implementations,
+    rustdoc::broken_intra_doc_links
+)]
+
 use std::collections::{HashMap, HashSet};
 
 use once_cell::sync::Lazy;
@@ -32,6 +39,7 @@ macro_rules! letter_count {
     }};
 }
 
+/// Information about a letter in a guess
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LetterStatus {
     /// The guessed letter is in the correct position in the word (i.e., the green square)
@@ -42,6 +50,9 @@ pub enum LetterStatus {
     NotInWord,
 }
 
+/// The [_Wordle_](https://www.nytimes.com/games/wordle/index.html) game.
+///
+/// This struct manages the game state, selects words to guess against, and checks guesses.
 #[derive(Debug)]
 pub struct Wordle<'a> {
     /// (Pseudo-) Random Number Generator
