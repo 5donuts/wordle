@@ -15,10 +15,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use once_cell::sync::Lazy;
 use rand::seq::SliceRandom;
+
+/// Count the occurrences of letters in the given string
+macro_rules! letter_count {
+    ($word:ident) => {{
+        let mut letter_counts: HashMap<char, u8> = HashMap::new();
+        for letter in $word.chars() {
+            let count = *letter_counts.get(&letter).unwrap_or(&0);
+            letter_counts.insert(letter, count + 1);
+        }
+        letter_counts
+    }};
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LetterStatus {
@@ -72,15 +84,18 @@ impl<'a> Wordle<'a> {
         );
         assert_eq!(word.len(), 5, "Guess must have exactly 5 characters");
 
+        let answer = self.word.expect("Game not initialized");
+        assert_eq!(answer.len(), 5, "Answer must have exactly 5 characters");
+
+        // keep track of the number of occurrences of letters in the word
+        let mut letter_counts = letter_count!(answer);
+
         // ensure the guess is valid
         if self.guesses.contains(&word) {
-            let answer = self.word.expect("Game not initialized");
-            assert_eq!(answer.len(), 5, "Answer must have exactly 5 characters");
-
             let mut statuses = [LetterStatus::NotInWord; 5];
             let word = word.chars();
             for (i, c) in word.enumerate() {
-                let status = check_letter(answer, c, i);
+                let status = check_letter(answer, c, i, &mut letter_counts);
                 statuses[i] = status;
             }
             Ok(statuses)
@@ -96,20 +111,32 @@ impl<'a> Wordle<'a> {
 /// `word` - The word being guessed against
 /// `letter` - The letter to check against `word`
 /// `idx` - The position of `letter` in the guess
-fn check_letter(word: &str, letter: char, idx: usize) -> LetterStatus {
+/// `remaining` - The count of remaining unguessed letters in the word
+fn check_letter(
+    word: &str,
+    letter: char,
+    idx: usize,
+    remaining: &mut HashMap<char, u8>,
+) -> LetterStatus {
     assert!(idx < 5, "idx must be in [0..5)");
-    // letter is in word, need to check the position
-    if word.contains(letter) {
+
+    // if there is at least one remaining unguessed occurrence of letter in the word,
+    // we need to check the position
+    if let Some(count) = remaining.get(&letter) {
+        if *count == 0 {
+            return LetterStatus::NotInWord; // no occurrences remaining
+        }
+
+        remaining.insert(letter, count - 1); // decrement count of unguessed occurrences
+
         let word_letter_at_idx = word.chars().nth(idx).unwrap();
-        // TODO: handle double letters
+
         if letter == word_letter_at_idx {
             LetterStatus::Correct
         } else {
             LetterStatus::InWord
         }
-    }
-    // letter not in word
-    else {
+    } else {
         LetterStatus::NotInWord
     }
 }
@@ -119,68 +146,87 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_letter_count() {
+        let word = "abcde";
+        let mut expected: HashMap<char, u8> = HashMap::new();
+        expected.insert('a', 1);
+        expected.insert('b', 1);
+        expected.insert('c', 1);
+        expected.insert('d', 1);
+        expected.insert('e', 1);
+        let actual = letter_count!(word);
+        assert_eq!(expected, actual, "Letter counts built improperly");
+    }
+
+    #[test]
     fn test_check_letter() {
         // letter in word in correct position
         let word = "abcde";
+        let mut letter_counts = letter_count!(word);
         for i in 0..word.len() {
             let letter = word.chars().nth(i).unwrap();
             assert_eq!(
                 LetterStatus::Correct,
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Letter in word in correct position"
             );
         }
 
         // letter in word
         let word = "fghij";
+        let mut letter_counts = letter_count!(word);
         let guesses = "ghijf"; // rotate the word
         for i in 0..word.len() {
             let letter = guesses.chars().nth(i).unwrap();
             assert_eq!(
                 LetterStatus::InWord,
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Letter in word, not in correct position"
             );
         }
 
         // letter not in word
         let word = "klmno";
+        let mut letter_counts = letter_count!(word);
         let guesses = "abcde";
         for i in 0..word.len() {
             let letter = guesses.chars().nth(i).unwrap();
             assert_eq!(
                 LetterStatus::NotInWord,
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Letter not in word"
             );
         }
 
         // double letters, both in correct position
         let word = "aabcd";
+        let mut letter_counts = letter_count!(word);
         let guess = "aabcd";
         for i in 0..word.len() {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 LetterStatus::Correct,
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters, both in correct position"
             );
         }
 
         // double letters, both in wrong position
         let word = "aabcd";
+        let mut letter_counts = letter_count!(word);
         let guess = "bcdaa";
         for i in 0..word.len() {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 LetterStatus::InWord,
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters, both in wrong position"
             );
         }
 
         // double letters, one in correct position
         let word = "aabcd";
+        let mut letter_counts = letter_count!(word);
         let guess = "abacd";
         let expected = vec![
             LetterStatus::Correct,
@@ -193,13 +239,14 @@ mod tests {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 expected[i],
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters, one in correct position"
             );
         }
 
         // double letters, only one guessed (correct position)
         let word = "aabcd";
+        let mut letter_counts = letter_count!(word);
         let guess = "axbcd";
         let expected = vec![
             LetterStatus::Correct,
@@ -212,13 +259,14 @@ mod tests {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 expected[i],
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters, only one guessed (correct position)"
             );
         }
 
         // double letters, only one guessed (incorrect position)
         let word = "aabcd";
+        let mut letter_counts = letter_count!(word);
         let guess = "xxacd";
         let expected = vec![
             LetterStatus::NotInWord,
@@ -231,13 +279,14 @@ mod tests {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 expected[i],
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters, only one guessed (incorrect position)"
             );
         }
 
         // double letters guessed, only one in word (one correct position)
         let word = "abcde";
+        let mut letter_counts = letter_count!(word);
         let guess = "aacde";
         let expected = vec![
             LetterStatus::Correct,
@@ -250,13 +299,14 @@ mod tests {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 expected[i],
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters guessed, only one in word (one correct position)"
             );
         }
 
         // double letters guessed, only one in word (both incorrect position)
         let word = "abcde";
+        let mut letter_counts = letter_count!(word);
         let guess = "xbcaa";
         let expected = vec![
             LetterStatus::NotInWord,
@@ -269,7 +319,7 @@ mod tests {
             let letter = guess.chars().nth(i).unwrap();
             assert_eq!(
                 expected[i],
-                check_letter(word, letter, i),
+                check_letter(word, letter, i, &mut letter_counts),
                 "Double letters guessed, only one in word (both incorrect position)"
             );
         }
