@@ -127,7 +127,9 @@ fn check_letter(
             return LetterStatus::NotInWord; // no occurrences remaining
         }
 
-        remaining.insert(letter, count - 1); // decrement count of unguessed occurrences
+        // decrement count of unguessed occurrences
+        let count = count - 1;
+        remaining.insert(letter, count);
 
         // check the letter against the answer
         let word_letter_at_idx = word.chars().nth(idx).unwrap();
