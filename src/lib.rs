@@ -129,14 +129,17 @@ fn check_letter(
 
         remaining.insert(letter, count - 1); // decrement count of unguessed occurrences
 
+        // check the letter against the answer
         let word_letter_at_idx = word.chars().nth(idx).unwrap();
-
         if letter == word_letter_at_idx {
             LetterStatus::Correct
         } else {
             LetterStatus::InWord
         }
-    } else {
+    }
+    // if there are no remaining unguessed occurrences of the letter, then this
+    // letter is a duplicate and is thus not in the word
+    else {
         LetterStatus::NotInWord
     }
 }
